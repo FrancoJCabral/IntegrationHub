@@ -1,0 +1,19 @@
+@IntegrationHub.Api_HostAddress = https://localhost:7180
+
+GET {{IntegrationHub.Api_HostAddress}}/api/health
+Accept: application/json
+
+### Create a job (remains Pending; no processing in Stage 1)
+POST {{IntegrationHub.Api_HostAddress}}/api/integrations/jobs
+Content-Type: application/json
+
+{
+  "connector": "Crm",
+  "operation": "SyncCustomer",
+  "externalId": "customer-123"
+}
+
+### Replace jobId with the ID returned above, or request its Location directly.
+@jobId = 00000000-0000-0000-0000-000000000000
+GET {{IntegrationHub.Api_HostAddress}}/api/integrations/jobs/{{jobId}}
+Accept: application/json
