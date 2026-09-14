@@ -3,7 +3,7 @@
 GET {{IntegrationHub.Api_HostAddress}}/api/health
 Accept: application/json
 
-### Create a job (remains Pending; no processing in Stage 1)
+### Create a job (GET remains Pending; publisher is InMemory by default)
 POST {{IntegrationHub.Api_HostAddress}}/api/integrations/jobs
 Content-Type: application/json
 

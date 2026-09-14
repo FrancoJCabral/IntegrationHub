@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\IntegrationHub.Domain\IntegrationHub.Domain.csproj" />
+    <ProjectReference Include="..\IntegrationHub.Contracts\IntegrationHub.Contracts.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

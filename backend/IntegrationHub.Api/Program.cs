@@ -1,8 +1,10 @@
+using IntegrationHub.Api.Infrastructure.Messaging;
 using IntegrationHub.Api.Infrastructure;
 using IntegrationHub.Application;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
+builder.Services.AddIntegrationMessaging(builder.Configuration);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddProblemDetails();
