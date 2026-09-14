@@ -21,6 +21,8 @@ public sealed class IdempotentConnectorExecutor(
         if (!await store.TryAcquireAsync(message.JobId, owner, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            Observability.JobsDuplicated.Add(1);
+            System.Diagnostics.Activity.Current?.AddEvent(new("idempotency.duplicate"));
             logger.LogInformation("Duplicate detected for job {JobId}; skipping connector.", message.JobId);
             return;
         }
@@ -34,6 +36,7 @@ public sealed class IdempotentConnectorExecutor(
             if (!await store.CompleteAsync(message.JobId, owner, execution.Token))
                 throw new InvalidOperationException("Idempotency lease ownership was lost.");
             completed = true;
+            Observability.JobsProcessed.Add(1);
             logger.LogInformation("Idempotency completed for job {JobId}.", message.JobId);
         }
         finally

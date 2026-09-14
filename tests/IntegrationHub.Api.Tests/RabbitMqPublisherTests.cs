@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using IntegrationHub.Api.Infrastructure.Messaging;
 using IntegrationHub.Contracts;
@@ -22,6 +23,7 @@ public sealed class RabbitMqPublisherTests
             .ReturnsAsync(channel.Object);
         var factory = new Mock<IConnectionFactory>(MockBehavior.Strict);
         factory.Setup(x => x.CreateConnectionAsync(It.IsAny<CancellationToken>())).ReturnsAsync(connection.Object);
+        using var parent = new Activity("http-request").SetIdFormat(ActivityIdFormat.W3C).Start();
         var confirmation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         BasicProperties? properties = null;
         IntegrationJobSubmittedMessage? published = null;
@@ -43,6 +45,9 @@ public sealed class RabbitMqPublisherTests
             Assert.Equal(message, published);
             Assert.NotNull(properties);
             Assert.True(properties.Persistent);
+            Assert.NotNull(properties.Headers);
+            Assert.True(ActivityContext.TryParse((string)properties.Headers["traceparent"]!, null, out var propagated));
+            Assert.Equal(parent.TraceId, propagated.TraceId);
             Assert.Equal("application/json", properties.ContentType);
             Assert.NotNull(channelOptions);
             Assert.True(channelOptions.PublisherConfirmationsEnabled);

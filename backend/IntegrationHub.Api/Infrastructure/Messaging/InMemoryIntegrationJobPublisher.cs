@@ -14,7 +14,9 @@ public sealed class InMemoryIntegrationJobPublisher : IIntegrationJobPublisher
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(message);
+        using var activity = Observability.Activities.StartActivity("inmemory.publish", System.Diagnostics.ActivityKind.Producer);
         _messages.Enqueue(message);
+        Observability.JobsPublished.Add(1);
         return Task.CompletedTask;
     }
 }

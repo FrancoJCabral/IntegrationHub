@@ -54,8 +54,12 @@ public sealed class Worker(
             {
                 try
                 {
+                    using var activity = Observability.StartConsumerActivity(delivery.BasicProperties.Headers);
+                    activity?.SetTag("messaging.system", "rabbitmq");
+                    activity?.SetTag("messaging.destination.name", options.Queue);
                     // The body is fully consumed before this callback returns.
                     var succeeded = await processor.ProcessAsync(delivery.Body, stoppingToken);
+                    if (!succeeded) activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error);
                     if (succeeded)
                         await channel.BasicAckAsync(delivery.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
                     else

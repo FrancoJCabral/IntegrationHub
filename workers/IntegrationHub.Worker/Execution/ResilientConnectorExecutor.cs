@@ -30,6 +30,8 @@ public sealed class ResilientConnectorExecutor : IConnectorExecutor
         if (message.Connector is null || !_connectors.TryGetValue(message.Connector, out var entry))
             throw new PermanentConnectorException("Unsupported connector.");
 
+        using var activity = Observability.Activities.StartActivity("connector.execute");
+        activity?.SetTag("connector.name", message.Connector);
         var context = ResilienceContextPool.Shared.Get(cancellationToken);
         context.Properties.Set(JobIdKey, message.JobId);
         try
@@ -37,9 +39,25 @@ public sealed class ResilientConnectorExecutor : IConnectorExecutor
             _logger.LogInformation("Connector execution started for job {JobId} using {Connector}.",
                 message.JobId, message.Connector);
             await entry.Pipeline.ExecuteAsync(
-                async ctx => await entry.Connector.ExecuteAsync(message, ctx.CancellationToken), context);
+                async ctx =>
+                {
+                    using var attempt = Observability.Activities.StartActivity("connector.attempt");
+                    Observability.ConnectorExecutions.Add(1);
+                    try { await entry.Connector.ExecuteAsync(message, ctx.CancellationToken); }
+                    catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                    {
+                        Observability.ConnectorFailures.Add(1);
+                        attempt?.SetStatus(System.Diagnostics.ActivityStatusCode.Error);
+                        throw;
+                    }
+                }, context);
             _logger.LogInformation("Connector execution completed for job {JobId} using {Connector}.",
                 message.JobId, message.Connector);
+        }
+        catch (Exception)
+        {
+            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error);
+            throw;
         }
         finally { ResilienceContextPool.Shared.Return(context); }
     }
@@ -86,6 +104,8 @@ public sealed class ResilientConnectorExecutor : IConnectorExecutor
                     !args.Context.CancellationToken.IsCancellationRequested && IsTransient(args.Outcome.Exception)),
                 OnRetry = args =>
                 {
+                    Observability.Retries.Add(1);
+                    System.Diagnostics.Activity.Current?.AddEvent(new("connector.retry"));
                     _logger.LogWarning("Retry {Attempt} for job {JobId} using {Connector} after {Delay}; error {ErrorType}.",
                         args.AttemptNumber + 1, args.Context.Properties.GetValue(JobIdKey, Guid.Empty),
                         connector, args.RetryDelay, args.Outcome.Exception?.GetType().Name);

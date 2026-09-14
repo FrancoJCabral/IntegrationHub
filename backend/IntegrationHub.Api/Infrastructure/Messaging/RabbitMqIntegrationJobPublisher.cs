@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using IntegrationHub.Application;
 using IntegrationHub.Contracts;
@@ -16,6 +17,9 @@ public sealed class RabbitMqIntegrationJobPublisher(RabbitMqOptions options, ICo
     public async Task PublishAsync(IntegrationJobSubmittedMessage message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
+        using var activity = Observability.Activities.StartActivity("rabbitmq.publish", ActivityKind.Producer);
+        activity?.SetTag("messaging.system", "rabbitmq");
+        activity?.SetTag("messaging.destination.name", options.Exchange);
         await _gate.WaitAsync(cancellationToken);
         try
         {
@@ -39,12 +43,21 @@ public sealed class RabbitMqIntegrationJobPublisher(RabbitMqOptions options, ICo
 
             var body = JsonSerializer.SerializeToUtf8Bytes(message);
             var properties = new BasicProperties { ContentType = "application/json", Persistent = true };
+            var current = Activity.Current;
+            if (current?.Id is not null)
+            {
+                properties.Headers = new Dictionary<string, object?> { ["traceparent"] = current.Id };
+                if (current.TraceStateString is not null)
+                    properties.Headers["tracestate"] = current.TraceStateString;
+            }
             // mandatory + tracked confirms makes unroutable/negatively acknowledged publications fail.
             await _channel.BasicPublishAsync(options.Exchange, options.RoutingKey, mandatory: true,
                 basicProperties: properties, body: body, cancellationToken: cancellationToken);
+            Observability.JobsPublished.Add(1);
         }
         catch
         {
+            activity?.SetStatus(ActivityStatusCode.Error);
             // A later request can establish a fresh channel; this request is never retried.
             await ReleaseResourcesAsync();
             throw;
