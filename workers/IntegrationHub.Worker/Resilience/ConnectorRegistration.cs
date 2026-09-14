@@ -1,4 +1,5 @@
 using IntegrationHub.Worker.Execution;
+using IntegrationHub.Worker.Idempotency;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
@@ -15,7 +16,12 @@ public static class ConnectorRegistration
         services.TryAddSingleton(TimeProvider.System);
         foreach (var name in new[] { "Crm", "Erp", "Payments" })
             services.AddSingleton<IExternalConnector>(new SimulatedExternalConnector(name));
-        services.AddSingleton<IConnectorExecutor, ResilientConnectorExecutor>();
+        services.AddIdempotency(configuration);
+        services.AddSingleton<ResilientConnectorExecutor>();
+        services.AddSingleton<IConnectorExecutor>(provider => new IdempotentConnectorExecutor(
+            provider.GetRequiredService<ResilientConnectorExecutor>(), provider.GetRequiredService<IIdempotencyStore>(),
+            provider.GetRequiredService<IOptions<IdempotencyOptions>>(), provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILogger<IdempotentConnectorExecutor>>()));
         return services;
     }
 }
