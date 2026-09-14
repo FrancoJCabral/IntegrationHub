@@ -31,13 +31,13 @@ public sealed class IntegrationMessageProcessor(IConnectorExecutor executor, ILo
         try
         {
             await executor.ExecuteAsync(message, cancellationToken);
-            logger.LogInformation("Processed job {JobId} using {Connector}.", message.JobId, message.Connector);
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-        catch (Exception)
+        catch (Exception exception)
         {
-            logger.LogError("Processing failed for job {JobId}; rejecting without requeue.", message.JobId);
+            logger.LogError("Execution failed after resilience for job {JobId}; error {ErrorType}; rejecting without requeue.",
+                message.JobId, exception.GetType().Name);
             return false;
         }
     }

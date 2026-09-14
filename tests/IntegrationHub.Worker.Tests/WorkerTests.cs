@@ -23,14 +23,14 @@ public sealed class WorkerTests
     {
         var message = Message(connector);
         var original = message with { };
-        await new SimulatedConnectorExecutor().ExecuteAsync(message, CancellationToken.None);
+        await new SimulatedExternalConnector(connector).ExecuteAsync(message, CancellationToken.None);
         Assert.Equal(original, message);
     }
 
     [Fact]
     public async Task Unknown_connector_is_rejected() =>
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            new SimulatedConnectorExecutor().ExecuteAsync(Message("Unknown"), CancellationToken.None));
+        await Assert.ThrowsAsync<PermanentConnectorException>(() =>
+            new SimulatedExternalConnector("Unknown").ExecuteAsync(Message("Unknown"), CancellationToken.None));
 
     [Fact]
     public async Task Cancellation_is_honored()
@@ -38,7 +38,7 @@ public sealed class WorkerTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            new SimulatedConnectorExecutor().ExecuteAsync(Message(), cancellation.Token));
+            new SimulatedExternalConnector("Crm").ExecuteAsync(Message(), cancellation.Token));
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public sealed class WorkerTests
     {
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
-        var processor = new IntegrationMessageProcessor(new SimulatedConnectorExecutor(),
+        var processor = new IntegrationMessageProcessor(new Mock<IConnectorExecutor>(MockBehavior.Strict).Object,
             NullLogger<IntegrationMessageProcessor>.Instance);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             processor.ProcessAsync(JsonSerializer.SerializeToUtf8Bytes(Message()), cancellation.Token));
